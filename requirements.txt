@@ -1,0 +1,5 @@
+# Exact versions this code was tested with
+anthropic==1.9.0
+requests==2.33.1
+pillow==12.1.1
+pythainlp==5.3.8
