@@ -1,0 +1,56 @@
+name: Daily Short
+
+on:
+  schedule:
+    - cron: "0 23 * * *"   # 06:00 Bangkok time (GitHub may start a few minutes late)
+  workflow_dispatch:        # "Run workflow" button for manual runs
+
+permissions:
+  contents: write           # lets the job save topic history back to the repo
+
+jobs:
+  make-short:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install system packages
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg libraqm0 libfribidi0
+
+      - name: Install Python packages
+        run: pip install -r requirements.txt
+
+      - name: Make today's Short
+        env:                # API keys come from GitHub Secrets - see settings.py
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python run.py
+
+      - name: Save video in GitHub
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: short-${{ github.run_number }}
+          path: |
+            out/*/short.mp4
+            out/*/cover.png
+            out/*/post.txt
+            out/*/script.json
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Save topic history
+        if: always()
+        run: |
+          git config user.name "shorts-bot"
+          git config user.email "shorts-bot@users.noreply.github.com"
+          git add data/history.json
+          git diff --cached --quiet || (git commit -m "history: $(date -u +%F)" && git pull --rebase && git push)
