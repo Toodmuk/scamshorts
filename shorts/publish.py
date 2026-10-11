@@ -68,8 +68,34 @@ def _status(request_id, tries=20, wait=15):
     return {"note": f"still processing - check the Upload-Post dashboard (request {request_id})"}
 
 
+def _items(results):
+    """Upload-Post may return results as a dict {platform: {...}} or a list
+    [{platform: ..., ...}]. Normalise both to (platform, result) pairs."""
+    if isinstance(results, dict):
+        return list(results.items())
+    if isinstance(results, list):
+        out = []
+        for r in results:
+            name = (r.get("platform") or r.get("name") or "platform") if isinstance(r, dict) else "platform"
+            out.append((name, r))
+        return out
+    return []
+
+
+def _summary(platform_result):
+    r = platform_result
+    if not isinstance(r, dict):
+        return str(r)[:200]
+    failed = r.get("success") is False or str(r.get("status", "")).lower() in ("failed", "error")
+    if failed:
+        return f"ERROR: {r.get('error') or r.get('message') or r}"[:300]
+    return r.get("url") or r.get("post_url") or r.get("permalink") or "posted"
+
+
 def post(video_path, d):
-    """Returns {platform: 'url' or 'ERROR: ...'}."""
+    """Returns {platform: 'url' or 'ERROR: ...'}.
+    Once Upload-Post accepts the upload, this never raises - so a post is
+    always recorded and never sent twice."""
     with open(video_path, "rb") as f:
         r = requests.post(f"{API}/upload", headers={"Authorization": f"Apikey {KEY}"},
                           data=build_form(d), files={"video": ("short.mp4", f, "video/mp4")},
@@ -80,16 +106,14 @@ def post(video_path, d):
         raise RuntimeError(f"Upload-Post HTTP {r.status_code}: {r.text[:300]}")
     if not j.get("success"):
         raise RuntimeError(j.get("message") or j.get("error") or str(j)[:300])
-    if j.get("request_id") and not j.get("results"):
-        j = _status(j["request_id"])
 
-    out = {}
-    for platform, res in (j.get("results") or {}).items():
-        if isinstance(res, dict) and res.get("success"):
-            out[platform] = res.get("url") or "posted"
-        else:
-            err = res.get("error") if isinstance(res, dict) else res
-            out[platform] = f"ERROR: {err}"
-    if not out:
-        out["upload-post"] = j.get("note") or str(j)[:300]
-    return out
+    # ---- from here on the post has been accepted: never raise ----
+    try:
+        if j.get("request_id") and not j.get("results"):
+            j = _status(j["request_id"])
+        out = {}
+        for platform, res in _items(j.get("results")):
+            out[str(platform)] = _summary(res)
+        return out or {"upload-post": j.get("note") or "posted - links in the Upload-Post dashboard"}
+    except Exception as e:
+        return {"upload-post": f"posted - links in the Upload-Post dashboard ({e})"}
