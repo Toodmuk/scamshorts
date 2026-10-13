@@ -48,7 +48,7 @@ POST_MODE = "approve"
 
 # Shown in the Telegram message. The real posting time is the cron line in
 # .github/workflows/post.yml  ("0 11 * * *" = 18:00 Bangkok)
-POST_TIME = "18:00"
+POST_TIME = "22:00"
 
 # Add ",tiktok" if you're on a paid Upload-Post plan
 PLATFORMS = "youtube,facebook,instagram"
