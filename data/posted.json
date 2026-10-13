@@ -1,1 +1,11 @@
-{}
+{
+ "2026-10-13": {
+  "status": "posted",
+  "title": "คนคุยออนไลน์ขอยืมเงิน ส่งเอกสารตำรวจมาให้ดู อย่าโอน #shorts",
+  "results": {
+   "youtube": "ERROR: {'platform': 'youtube', 'status': 'queued', 'attempts': 0, 'success': False}",
+   "facebook": "ERROR: {'platform': 'facebook', 'status': 'queued', 'attempts': 0, 'success': False}",
+   "instagram": "ERROR: {'platform': 'instagram', 'status': 'queued', 'attempts': 0, 'success': False}"
+  }
+ }
+}
