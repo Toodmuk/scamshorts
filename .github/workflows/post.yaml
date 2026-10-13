@@ -2,12 +2,16 @@ name: Post Short
 
 on:
   schedule:
-    - cron: "0 11 * * *"   # 18:00 Bangkok time (GitHub may start a few minutes late)
-  workflow_dispatch:        # "Run workflow" button to post right away
+    - cron: "23 0-15 * * *"   # every hour 07:23-22:23 Bangkok: posts within ~1 hour of your "ok"
+  workflow_dispatch:           # "Run workflow" button to post right away
 
 permissions:
-  contents: write           # save data/posted.json
-  actions: read             # download the video made by the morning run
+  contents: write              # save data/posted.json
+  actions: read                # download the video made by the morning run
+
+concurrency:                   # never run two at once (no double posts)
+  group: post-short
+  cancel-in-progress: false
 
 jobs:
   post:
@@ -16,21 +20,36 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      - name: Already done today?
+        id: done
+        run: |
+          TODAY=$(TZ=Asia/Bangkok date +%F)
+          if grep -q "\"$TODAY\"" data/posted.json 2>/dev/null; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"; echo "Already handled $TODAY - nothing to do."
+          fi
+
       - uses: actions/setup-python@v6
+        if: steps.done.outputs.skip != 'true'
         with:
           python-version: "3.12"
 
-      - run: pip install requests==2.33.1
+      - name: Install
+        if: steps.done.outputs.skip != 'true'
+        run: pip install requests==2.33.1
 
       - name: Download today's video
+        if: steps.done.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          RUN_ID=$(gh run list --workflow daily.yml --status success --limit 1 --json databaseId --jq '.[0].databaseId')
-          if [ -n "$RUN_ID" ]; then gh run download "$RUN_ID" --dir artifact; fi
+          for RUN_ID in $(gh run list --workflow daily.yml --limit 3 --json databaseId --jq '.[].databaseId'); do
+            gh run download "$RUN_ID" --dir "artifact/$RUN_ID" 2>/dev/null && echo "Got files from run $RUN_ID" || true
+          done
 
       - name: Post if approved
-        env:                # API keys come from GitHub Secrets - see settings.py
+        if: steps.done.outputs.skip != 'true'
+        continue-on-error: true    # post.py already messages you about its own problems
+        env:                       # API keys come from GitHub Secrets - see settings.py
           UPLOAD_POST_API_KEY: ${{ secrets.UPLOAD_POST_API_KEY }}
           UPLOAD_POST_USER: ${{ secrets.UPLOAD_POST_USER }}
           FACEBOOK_PAGE_ID: ${{ secrets.FACEBOOK_PAGE_ID }}
@@ -39,9 +58,19 @@ jobs:
         run: python post.py artifact
 
       - name: Save post log
-        if: always()
+        if: always() && steps.done.outputs.skip != 'true'
         run: |
           git config user.name "shorts-bot"
           git config user.email "shorts-bot@users.noreply.github.com"
           git add data/posted.json 2>/dev/null || true
-          git diff --cached --quiet || (git commit -m "posted: $(date -u +%F)" && git pull --rebase && git push)
+          git diff --cached --quiet || (git commit -m "posted: $(TZ=Asia/Bangkok date +%F)" && git pull --rebase && git push)
+
+      - name: Tell me if something broke
+        if: failure()
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" \
+            --data-urlencode "text=❌ ระบบโพสต์มีปัญหา ดูรายละเอียด: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" > /dev/null
