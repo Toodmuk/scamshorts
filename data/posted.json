@@ -16,5 +16,14 @@
    "facebook": "https://www.facebook.com/reel/1272197488383497",
    "instagram": "ERROR: {'platform': 'instagram', 'status': 'processing', 'attempts': 1, 'success': False}"
   }
+ },
+ "2026-10-15": {
+  "status": "posted",
+  "title": "ได้ SMS ใบสั่งจราจรค้างชำระ อย่ากดลิงก์! #shorts",
+  "results": {
+   "youtube": "https://www.youtube.com/watch?v=G0TppA8rZMQ",
+   "facebook": "https://www.facebook.com/reel/959949606674989",
+   "instagram": "ERROR: {'platform': 'instagram', 'status': 'processing', 'attempts': 1, 'success': False}"
+  }
  }
 }
