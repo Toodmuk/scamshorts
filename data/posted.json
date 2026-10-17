@@ -34,5 +34,14 @@
    "facebook": "https://www.facebook.com/reel/1109778801901421",
    "instagram": "ERROR: {'platform': 'instagram', 'status': 'processing', 'attempts': 1, 'success': False}"
   }
+ },
+ "2026-10-17": {
+  "status": "posted",
+  "title": "ชวนลงทุนหุ้นในไลน์ ถอนเงินไม่ได้ ต้องโอนเพิ่ม คือหลอก #shorts",
+  "results": {
+   "youtube": "https://www.youtube.com/watch?v=cKHiaHHUBv4",
+   "facebook": "https://www.facebook.com/reel/1113476241265160",
+   "instagram": "ERROR: {'platform': 'instagram', 'status': 'processing', 'attempts': 1, 'success': False}"
+  }
  }
 }
