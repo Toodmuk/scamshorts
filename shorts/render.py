@@ -3,6 +3,7 @@ typing dots -> message pops in with a notification sound, slow zoom on the
 phone, the red stamp slams down with a shake and a thud, end card pops in."""
 import array
 import glob
+import json
 import math
 import os
 import random
@@ -11,6 +12,8 @@ import wave
 
 from PIL import Image, ImageDraw, ImageFont, features
 
+import settings
+from . import beats
 from .text import clean, wrap_phrases, wrap_words
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -49,6 +52,7 @@ STAMP_LEN = 0.16   # fall time
 SHAKE_LEN = 0.35   # phone shake after impact
 END_POP = 0.25     # end card pop-in
 ZOOM = 0.025       # slow zoom on the phone across the whole video (2.5%)
+CHANNEL_NAME = getattr(settings, "CHANNEL_NAME", "")
 
 _fonts = {}
 
@@ -128,26 +132,58 @@ def _with_alpha(im, a):
 
 
 # ---- static pieces ----
-def draw_hook(draw, hook):
+def draw_hook(draw, hook, source_label=""):
+    """Headline at the top; a small black 'source' tag under it if we have one."""
+    area_top, area_h = (88, 236) if source_label else (110, 290)
     f, lines = fit(draw, hook, HEAD, 940, range(104, 58, -4), 2)
     block_h = lh(f, 0.92) * len(lines)
-    top = 110 + (290 - block_h) // 2
+    top = area_top + (area_h - block_h) // 2
     text_block(draw, lines, f, W // 2, top, C["ink"], spacing=0.92)
+    if source_label:
+        sf, sl = fit(draw, source_label, SEMI, 860, range(32, 22, -2), 1)
+        tw = draw.textlength(sl[0], font=sf)
+        x0, y0 = W // 2 - tw / 2 - 26, 354
+        draw.rounded_rectangle((x0, y0, W - x0, y0 + 52), radius=26, fill=C["ink"])
+        draw.text((W // 2, y0 + 26), sl[0], font=sf, fill=C["paper"], anchor="mm")
 
 
-def draw_subtitle(draw, text):
+def _rich_line(draw, line, font, cx, y, words):
+    """Centered line with key words in yellow."""
+    segs = [(line, False)]
+    for w in words:
+        out = []
+        for t, hi in segs:
+            if hi or not w or w not in t:
+                out.append((t, hi))
+                continue
+            parts = t.split(w)
+            for i, part in enumerate(parts):
+                if part:
+                    out.append((part, False))
+                if i < len(parts) - 1:
+                    out.append((w, True))
+        segs = out
+    x = cx - sum(draw.textlength(t, font=font) for t, _ in segs) / 2
+    for t, hi in segs:
+        draw.text((x, y), t, font=font, fill=C["bg"] if hi else C["paper"], anchor="la")
+        x += draw.textlength(t, font=font)
+
+
+def draw_subtitle(draw, text, highlight=()):
     f, lines = fit(draw, text, SEMI, 880, range(58, 42, -2), 3)
     step = lh(f, 0.96)
     box_h = step * len(lines) + 56
     draw.rounded_rectangle((50, SUB_TOP, W - 50, SUB_TOP + box_h), radius=34, fill=C["ink"])
-    text_block(draw, lines, f, W // 2, SUB_TOP + 28, C["paper"], spacing=0.96)
+    words = sorted({w for w in highlight if w}, key=len, reverse=True)
+    for i, ln in enumerate(lines):
+        _rich_line(draw, ln, f, W // 2, SUB_TOP + 28 + i * step, words)
 
 
-def base_frame(hook, subtitle):
+def base_frame(hook, subtitle, highlight=(), source_label=""):
     img = Image.new("RGB", (W, H), C["bg"])
     d = ImageDraw.Draw(img)
-    draw_hook(d, hook)
-    draw_subtitle(d, subtitle)
+    draw_hook(d, hook, source_label)
+    draw_subtitle(d, subtitle, highlight)
     return img
 
 
@@ -176,11 +212,14 @@ def end_panel(tip):
     y = text_block(draw, ["กฎข้อเดียวที่ต้องจำ"], F(BOLD, 46), cx, y, C["stamp"])
     f, lines = fit(draw, tip, BOLD, PW - 140, range(76, 50, -2), 4)
     y = text_block(draw, lines, f, cx, y + 30, C["paper"], spacing=0.95)
-    y = max(y + 60, PH - 470)
+    y = max(y + 50, PH - 520)
     draw.line((90, y, PW - 90, y), fill=(70, 70, 70), width=3)
     y = text_block(draw, ["สงสัยว่าโดนหลอก"], F(SEMI, 48), cx, y + 44, C["paper"])
     y = text_block(draw, ["โทร 1441"], F(HEAD, 150), cx, y + 4, C["bg"], spacing=0.85)
     text_block(draw, ["ศูนย์ AOC ตลอด 24 ชั่วโมง"], F(REG, 40), cx, y + 6, (190, 190, 190))
+    if CHANNEL_NAME:
+        ff, fl = fit(draw, f"กดติดตาม {CHANNEL_NAME}  กลโกงใหม่ทุกวัน", SEMI, PW - 120, range(40, 28, -2), 1)
+        draw.text((cx, PH - 62), fl[0], font=ff, fill=C["bg"], anchor="ms")
     return im
 
 
@@ -235,7 +274,10 @@ class Phone:
     def bubble(self, idx, m):
         """Rendered bubble image for message idx (cached)."""
         if idx not in self._cache:
-            lines = wrap_phrases(m["text"], self.font, self.max_text_w, self.scratch)[:9]
+            lines = wrap_phrases(m["text"], self.font, self.max_text_w, self.scratch, strict=True)
+            if len(lines) >= 999:   # a phrase is wider than the bubble: allow word breaks
+                lines = wrap_phrases(m["text"], self.font, self.max_text_w, self.scratch)
+            lines = lines[:9]
             w = int(max(self.scratch.textlength(l, font=self.font) for l in lines)) + 2 * self.PADX
             h = self.step * len(lines) + 2 * self.PADY
             fill, tcol = self._colors(m.get("from") == "me")
@@ -354,38 +396,98 @@ class ChatScene:
         return im
 
 
+class BeatScene:
+    """An animated infographic shown in place of the phone for one scene."""
+    def __init__(self, beat, stamp_mode, dur):
+        self.beat, self.stamp_mode, self.dur = beat, stamp_mode, dur
+
+
+def word_times(text, words, align, speech_len):
+    """(seconds, word) for when each highlight word starts being spoken.
+    Uses ElevenLabs character timings when we have them, else an estimate."""
+    chars, starts = "", []
+    if align:
+        chars = "".join(align.get("characters") or [])
+        starts = align.get("character_start_times_seconds") or []
+    out = []
+    for w in words:
+        t = None
+        if chars and len(starts) == len(chars):
+            i = chars.find(w)
+            if i >= 0:
+                t = float(starts[i])
+        if t is None:
+            i = text.find(w)
+            t = speech_len * i / max(len(text), 1) if i >= 0 else 0.0
+        out.append((t, w))
+    return sorted(out)
+
+
+FONT_KEYS = {"head": HEAD, "semi": SEMI, "bold": BOLD, "reg": REG}
+ENTRY = 0.22       # pop-in time when switching between phone and an infographic
+
+
 class Renderer:
-    def __init__(self, data, durs):
+    def __init__(self, data, durs, aligns=None):
         check_thai_support()
         self.data = data
+        self.src = data.get("source_label", "")
+        self.aligns = aligns or [None] * len(durs)
         self.phone = Phone(data["app"], data["sender"])
         self.stamp = stamp_image()
         self.durs = durs
         self.scenes, self.sfx = [], []
-        msgs, stamped, t0 = [], False, 0.0
+        msgs, stamped, t0, prev_beat = [], False, 0.0, False
         for i, s in enumerate(data["scenes"]):
-            base = base_frame(data["hook"], clean(s["narration"]))
-            m = s.get("message")
-            mode = "on" if stamped else ("slam" if s.get("stamp") else None)
-            sc = ChatScene(self.phone, list(msgs), m, len(msgs), mode, base, durs[i])
-            self.scenes.append(sc)
-            if m:
-                self.sfx.append((t0 + sc.pop_at, "pop" if sc.mine else "ding"))
-                msgs.append((len(msgs), m))
-            if mode == "slam":
+            vis = s.get("visual")
+            slam = bool(s.get("stamp")) and not stamped
+            beat = None
+            if vis:   # test-draw the infographic first; if anything is off, fall back to the chat
+                try:
+                    beat = beats.make(vis, (PW, PH), durs[i], F, fit, FONT_KEYS)
+                    for tt in (0, durs[i] / 2, max(0, durs[i] - 1 / FPS)):
+                        beat.frame(tt)
+                except Exception as e:
+                    print(f"Visual skipped in scene {i + 1} ({e}) - showing the chat instead.")
+                    beat = None
+            if beat:
+                sc = BeatScene(beat, "slam" if slam else None, durs[i])
+                self.sfx.append((t0, "pop"))
+                if vis["type"] == "money":
+                    self.sfx.append((t0 + 1.3, "ding"))
+                prev_beat = True
+            else:
+                m = s.get("message")
+                mode = "slam" if slam else ("on" if stamped else None)
+                sc = ChatScene(self.phone, list(msgs), m, len(msgs), mode, None, durs[i])
+                sc.after_beat = prev_beat
+                if m:
+                    self.sfx.append((t0 + sc.pop_at, "pop" if sc.mine else "ding"))
+                    msgs.append((len(msgs), m))
+                prev_beat = False
+            if slam:
                 self.sfx.append((t0 + STAMP_AT + STAMP_LEN - 0.02, "thud"))
                 stamped = True
+            sc.bases, sc.times = self._bases(clean(s["narration"]), s.get("highlight", ()), i)
+            self.scenes.append(sc)
             t0 += durs[i]
         self.chat_total = t0
-        self.end_base = base_frame(data["hook"], clean(data["end_narration"]))
+        self.end_bases, self.end_times = self._bases(clean(data["end_narration"]), ("1441",), len(durs) - 1)
         self.end_panel = end_panel(data["tip"])
         self.sfx.append((t0, "pop"))
 
-    def _phone_frame(self, sc, t, gt):
-        layer = sc.phone_layer(t)
-        s = 1 + ZOOM * (gt / max(self.chat_total, 0.01))
-        lw, lhh = int(PW * s), int(PH * s)
-        z = layer.resize((lw, lhh), Image.BILINEAR)
+    def _bases(self, text, words, idx):
+        """Subtitle frames with 0, 1, 2... key words lit up, plus when each lights up."""
+        timed = word_times(text, list(words), self.aligns[idx], 0.85 * self.durs[idx])
+        bases = [base_frame(self.data["hook"], text, [w for _, w in timed[:k]], self.src)
+                 for k in range(len(timed) + 1)]
+        return bases, [t for t, _ in timed]
+
+    @staticmethod
+    def _pick(bases, times, t):
+        return bases[sum(1 for x in times if x <= t)]
+
+    def _stamp(self, sc, t):
         dx = dy = 0
         stamp = None
         if sc.stamp_mode in ("slam", "on"):
@@ -402,15 +504,42 @@ class Renderer:
                 k = math.exp(-8 * ti)
                 dx = int(16 * k * math.sin(2 * math.pi * 17 * ti))
                 dy = int(8 * k * math.cos(2 * math.pi * 13 * ti))
-        frame = sc.base.copy()
-        frame.paste(z, (PCX - lw // 2 + dx, PCY - lhh // 2 + dy), z)
+        return dx, dy, stamp
+
+    def _finish(self, frame, layer, dx, dy, stamp):
+        frame.paste(layer, (PCX - layer.width // 2 + dx, PCY - layer.height // 2 + dy), layer)
         if stamp is not None:
             frame.paste(stamp, (PCX - stamp.width // 2 + dx, PCY + 60 - stamp.height // 2 + dy), stamp)
         return frame
 
+    def _phone_frame(self, sc, t, gt):
+        layer = sc.phone_layer(t)
+        s = 1 + ZOOM * (gt / max(self.chat_total, 0.01))
+        a = 1.0
+        if getattr(sc, "after_beat", False) and t < ENTRY:   # coming back from an infographic
+            x = t / ENTRY
+            s *= 0.92 + 0.08 * ease_out_cubic(x)
+            a = _clamp(x * 1.5)
+        z = layer.resize((int(PW * s), int(PH * s)), Image.BILINEAR)
+        z = _with_alpha(z, a)
+        dx, dy, stamp = self._stamp(sc, t)
+        return self._finish(self._pick(sc.bases, sc.times, t).copy(), z, dx, dy, stamp)
+
+    def _beat_frame(self, sc, t):
+        panel = sc.beat.frame(t)
+        if t < ENTRY:
+            x = t / ENTRY
+            s = 0.92 + 0.08 * ease_out_cubic(x)
+            panel = _with_alpha(panel.resize((int(PW * s), int(PH * s)), Image.BILINEAR), _clamp(x * 1.5))
+        dx, dy, stamp = self._stamp(sc, t)
+        return self._finish(self._pick(sc.bases, sc.times, t).copy(), panel, dx, dy, stamp)
+
+    def _scene_frame(self, sc, t, gt):
+        return self._beat_frame(sc, t) if isinstance(sc, BeatScene) else self._phone_frame(sc, t, gt)
+
     def _end_frame(self, t):
         x = _clamp(t / END_POP)
-        frame = self.end_base.copy()
+        frame = self._pick(self.end_bases, self.end_times, t).copy()
         s = 0.94 + 0.06 * ease_out_cubic(x)
         p = self.end_panel
         if s < 0.999:
@@ -424,14 +553,14 @@ class Renderer:
         for sc, d in zip(self.scenes, self.durs):
             for f in range(round(d * FPS)):
                 t = f / FPS
-                yield self._phone_frame(sc, t, gt + t)
+                yield self._scene_frame(sc, t, gt + t)
             gt += d
         for f in range(round(self.durs[-1] * FPS)):
             yield self._end_frame(f / FPS)
 
     def cover(self):
         sc = self.scenes[0]
-        return self._phone_frame(sc, sc.dur - 1 / FPS, sc.dur)
+        return self._scene_frame(sc, sc.dur - 1 / FPS, sc.dur)
 
 
 # ---- sound effects (synthesised, no files needed) ----
@@ -491,7 +620,7 @@ def _narration(audios, durs, tmp):
     return out
 
 
-def _mix(narration, sfx, tmp):
+def _mix(narration, sfx, tmp, loud=True):
     paths = make_sfx(tmp)
     cmd = ["ffmpeg", "-y", "-loglevel", "error", "-i", narration]
     chains, labels = [], []
@@ -506,7 +635,8 @@ def _mix(narration, sfx, tmp):
         cmd += ["-stream_loop", "-1", "-i", random.choice(tracks)]
         chains.append(f"[{n}:a]aformat=sample_rates=44100:channel_layouts=stereo,volume=0.10[m]")
         labels.append("[m]")
-    chains.append(f"[0:a]{''.join(labels)}amix=inputs={len(labels) + 1}:duration=first:normalize=0[a]")
+    level = ",loudnorm=I=-14:TP=-1.5:LRA=11,aresample=44100" if loud else ""
+    chains.append(f"[0:a]{''.join(labels)}amix=inputs={len(labels) + 1}:duration=first:normalize=0{level}[a]")
     out = os.path.join(tmp, "audio.wav")
     _run(cmd + ["-filter_complex", ";".join(chains), "-map", "[a]", "-c:a", "pcm_s16le", out])
     return out
@@ -518,7 +648,15 @@ def build(data, audios, durations, outdir):
     os.makedirs(tmp, exist_ok=True)
     # snap every scene to whole frames so picture and sound stay in sync
     durs = [max(1, round(d * FPS)) / FPS for d in durations]
-    r = Renderer(data, durs)
+    aligns = []
+    for i in range(len(durs)):   # word timings saved by voice.py (if the voice API sent them)
+        path = os.path.join(tmp, f"align_{i:02d}.json")
+        try:
+            with open(path, encoding="utf-8") as f:
+                aligns.append(json.load(f))
+        except (OSError, ValueError):
+            aligns.append(None)
+    r = Renderer(data, durs, aligns)
     r.cover().save(os.path.join(outdir, "cover.png"))
 
     video = os.path.join(tmp, "video.mp4")
@@ -535,7 +673,7 @@ def build(data, audios, durations, outdir):
     if proc.returncode != 0:
         raise RuntimeError("ffmpeg failed while encoding the video")
 
-    audio = _mix(_narration(audios, durs, tmp), r.sfx, tmp)
+    audio = _mix(_narration(audios, durs, tmp), r.sfx, tmp, loud=any(audios))
     final = os.path.join(outdir, "short.mp4")
     _run(["ffmpeg", "-y", "-loglevel", "error", "-i", video, "-i", audio,
           "-map", "0:v", "-map", "1:a", "-c:v", "copy", "-c:a", "aac", "-b:a", "160k",
