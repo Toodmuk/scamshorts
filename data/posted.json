@@ -43,5 +43,14 @@
    "facebook": "https://www.facebook.com/reel/1113476241265160",
    "instagram": "ERROR: {'platform': 'instagram', 'status': 'processing', 'attempts': 1, 'success': False}"
   }
+ },
+ "2026-10-19": {
+  "status": "posted",
+  "title": "ลูกส่งรูปเลือดขอเงิน อย่าโอน! แก๊งคอลฯ จัดฉากหลอกพ่อแม่ #shorts",
+  "results": {
+   "youtube": "https://www.youtube.com/watch?v=WbjDbBpkvJ0",
+   "facebook": "https://www.facebook.com/reel/1657348012639798",
+   "instagram": "ERROR: {'platform': 'instagram', 'status': 'processing', 'attempts': 1, 'success': False}"
+  }
  }
 }
