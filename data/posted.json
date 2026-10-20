@@ -52,5 +52,14 @@
    "facebook": "https://www.facebook.com/reel/1657348012639798",
    "instagram": "ERROR: {'platform': 'instagram', 'status': 'processing', 'attempts': 1, 'success': False}"
   }
+ },
+ "2026-10-20": {
+  "status": "posted",
+  "title": "ระวัง! อ้างขายสลากทำบุญ แลกของถูก หลอกผู้สูงอายุ #shorts",
+  "results": {
+   "youtube": "https://www.youtube.com/watch?v=k9TGi3_o71o",
+   "facebook": "https://www.facebook.com/reel/29852721627651874",
+   "instagram": "ERROR: {'platform': 'instagram', 'status': 'processing', 'attempts': 1, 'success': False}"
+  }
  }
 }
