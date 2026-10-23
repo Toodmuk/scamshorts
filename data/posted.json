@@ -74,5 +74,8 @@
    "facebook": "https://www.facebook.com/reel/4610625122536768",
    "instagram": "ERROR: {'platform': 'instagram', 'status': 'processing', 'attempts': 1, 'success': False}"
   }
+ },
+ "2026-10-23": {
+  "status": "no video"
  }
 }
