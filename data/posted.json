@@ -77,5 +77,14 @@
  },
  "2026-10-23": {
   "status": "no video"
+ },
+ "2026-10-26": {
+  "status": "posted",
+  "title": "เช่าคอนโดแล้วโอนล่วงหน้า 3 ปี ระวังโดนหลอก #shorts",
+  "results": {
+   "youtube": "https://www.youtube.com/watch?v=BCqARHCROkA",
+   "facebook": "https://www.facebook.com/reel/4547590902145176",
+   "instagram": "ERROR: {'platform': 'instagram', 'status': 'processing', 'attempts': 1, 'success': False}"
+  }
  }
 }
