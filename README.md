@@ -122,14 +122,37 @@ python run.py                            # full run (needs the env vars above)
 ```
 settings.py            THE ONLY FILE TO EDIT (voice, models, posting options)
 check.py               setup check: tests every key for ~$0.01
+assets/thailand_provinces.json   province shapes (Natural Earth, public domain)
 run.py                 morning run: research -> video -> Telegram
 post.py                evening run: check your ok/skip -> post everywhere
 shorts/script.py       Claude research + script prompt (edit tone/rules here)
 shorts/voice.py        ElevenLabs text-to-speech
 shorts/render.py       frames + video (colours, layout)
+shorts/beats.py        animated infographics: money counter, Thailand map, big stat, money flow
 shorts/deliver.py      Telegram preview + reading your ok/skip
 shorts/publish.py      posting via Upload-Post
 data/history.json      topics already covered (updated automatically)
 data/posted.json       what was posted, with links (updated automatically)
 samples/               example script for testing
 ```
+
+## Posting days and monthly limits
+- Videos are made on the days in `POST_DAYS` (settings.py) — **Mon, Wed, Fri, Sun** by default, about 17 a month.
+  That stays inside ElevenLabs Starter, the free GitHub minutes and storage. Change the days there; nothing else needs editing.
+- Every posting morning the voice credits left are checked; scripts are sized so they last until the plan renews,
+  and a day is skipped (with a Telegram note) only if credits are really short.
+- Videos are capped at 88 s (Facebook Reels limit 90 s) by speeding narration up slightly if needed.
+
+## Posting-day flow (fully automatic)
+- **06:17** — Claude researches a fresh scam, writes a 60–80 s documentary-style script, checks its own facts, and the video is rendered in the Constructivist style. It arrives in Telegram.
+- **~18:23** (checks at 12:23, 18:23–21:23) — it posts to YouTube, Facebook and Instagram by itself, and Telegram says "โพสต์แล้ว" with the links.
+- Reply **skip** before then if you don't want that day's video posted.
+- **Safety hold:** if a video has no sources, the fact-check didn't run, or the backup look was used, it is *not* auto-posted — Telegram asks you to reply **ok** instead.
+- Switch back to manual approval any time: `POST_MODE = "approve"` in `settings.py`.
+
+## Weekly report (Mondays ~09:17)
+`report.py` pulls followers, views, likes, comments and shares per platform and per video from
+Upload-Post's analytics API (no extra keys), has Claude analyse what worked, and sends it to Telegram.
+It also saves short "lessons" to `data/insights.txt`, which the script writer reads the following week
+(hooks, topics, pacing only — the fact rules never change). Run it any time from Actions → Weekly report.
+Optional secret `FACEBOOK_PAGE_ID` adds Facebook follower counts.

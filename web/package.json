@@ -1,0 +1,9 @@
+{
+  "name": "tantuangtee-renderer",
+  "private": true,
+  "description": "Constructivist-style video renderer for the daily Short",
+  "dependencies": {
+    "canvas": "3.2.3",
+    "node-web-audio-api": "2.2.0"
+  }
+}

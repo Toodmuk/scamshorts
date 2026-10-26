@@ -14,6 +14,7 @@ _EXTRA = {
     "สแกน", "บัญชีม้า", "อายัด", "แอดไลน์", "ค่าไฟ", "เงินคืน",
 }
 _TRIE = Trie(set(thai_words()) | _EXTRA)
+_UNITS = {"บาท", "ล้าน", "ล้านบาท", "หมื่น", "พัน", "คน", "ราย", "ครั้ง", "วัน", "นาที", "ชั่วโมง", "%"}
 
 _EMOJI = re.compile("[\U0001F000-\U0001FAFF\u2600-\u27BF\uFE0F\u200d]")
 _COMBINING = re.compile(r"[\u0E31\u0E34-\u0E3A\u0E47-\u0E4E]")
@@ -70,7 +71,13 @@ def _wrap_phrases(text, font, max_w, draw, strict=False):
     lines = []
     for para in clean(text).split("\n"):
         line = ""
-        for ph in para.split():
+        phrases = []
+        for ph in para.split():   # keep numbers with their words: "ลด 70%", "1,500 บาท"
+            if phrases and (ph[0].isdigit() or ph in _UNITS or phrases[-1][-1].isdigit() and ph in _UNITS):
+                phrases[-1] += " " + ph
+            else:
+                phrases.append(ph)
+        for ph in phrases:
             cand = f"{line} {ph}".strip()
             if draw.textlength(cand, font=font) <= max_w:
                 line = cand

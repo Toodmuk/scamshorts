@@ -26,7 +26,7 @@ from shorts import deliver, publish
 
 POSTED = os.path.join("data", "posted.json")
 BKK = ZoneInfo("Asia/Bangkok")
-LAST_HOUR = 22          # the 22:xx run is the last chance of the day
+LAST_HOUR = 21          # the 21:xx run is the last check of the day
 
 
 def load_posted():
@@ -40,6 +40,18 @@ def save_posted(posted):
     os.makedirs(os.path.dirname(POSTED), exist_ok=True)
     with open(POSTED, "w", encoding="utf-8") as f:
         json.dump(posted, f, ensure_ascii=False, indent=1)
+
+
+def safety_problems(d):
+    """Reasons not to post without a human look (auto mode only)."""
+    out = []
+    if not [s for s in d.get("sources") or [] if str((s or {}).get("url", "")).startswith("http")]:
+        out.append("ไม่มีแหล่งข้อมูลอ้างอิง")
+    if d.get("editor_ok") is False:
+        out.append("ขั้นตรวจข้อเท็จจริงไม่ได้ทำงาน")
+    if d.get("renderer") == "classic" and (getattr(settings, "RENDERER", "") or "").lower() == "constructivist":
+        out.append("ใช้ระบบตัดต่อสำรอง")
+    return out
 
 
 def main():
@@ -56,6 +68,10 @@ def main():
     last_run = now.hour >= LAST_HOUR
     mode = getattr(settings, "POST_MODE", "approve")
 
+    import schedule
+    if not schedule.is_post_day(now.date()) and not os.getenv("POST_ANY_DAY"):
+        print("Not a posting day.")
+        return 0
     posted = load_posted()
     if today in posted:
         print(f"Already handled today: {list(posted[today])}")
@@ -81,8 +97,11 @@ def main():
         return 0
 
     decision = deliver.approval(midnight)
-    go = decision == "ok" or (mode == "auto" and decision != "skip")
-    print(f"mode={mode} decision={decision} -> {'POST' if go else 'WAIT'}")
+    problems = safety_problems(data)
+    auto_ready = (mode == "auto" and decision != "skip" and not problems
+                  and now.hour >= int(getattr(settings, "AUTO_POST_HOUR", 18)))
+    go = decision == "ok" or auto_ready
+    print(f"mode={mode} decision={decision} problems={problems} -> {'POST' if go else 'WAIT'}")
 
     if a.dry_run:
         for k, v in publish.build_form(data):
@@ -94,6 +113,11 @@ def main():
         posted[today] = {"status": "skipped", "title": data["title"]}
         save_posted(posted)
         return 0
+    if not go and mode == "auto" and problems and decision != "skip" and f"held:{today}" not in posted:
+        deliver.notify("⏸ คลิปวันนี้ถูกพักไว้ ยังไม่โพสต์อัตโนมัติ\nเหตุผล: " + "; ".join(problems)
+                       + "\nดูคลิปแล้ว ตอบ ok เพื่อโพสต์ / skip เพื่อข้าม")
+        posted[f"held:{today}"] = {"problems": problems}
+        save_posted(posted)
     if not go:
         if last_run:
             deliver.notify("วันนี้ไม่ได้โพสต์ - ไม่ได้รับคำตอบ ok")
@@ -110,10 +134,13 @@ def main():
         deliver.notify(f"โพสต์ไม่สำเร็จ จะลองใหม่รอบถัดไป: {e}")
         return 1
 
-    deliver.notify("โพสต์แล้ว\n" + "\n".join(f"{p}: {r}" for p, r in results.items()))
-    posted[today] = {"status": "posted", "title": data["title"], "results": results}
+    u = publish.LAST_USAGE or {}
+    usage = f"\nUpload-Post เดือนนี้ใช้ไป {u['count']}/{u['limit']} ครั้ง" if u.get("limit") else ""
+    deliver.notify("โพสต์แล้ว\n" + "\n".join(f"{p}: {r}" for p, r in results.items()) + usage)
+    posted[today] = {"status": "posted", "title": data["title"], "hook": data.get("hook", ""),
+                     "topic": data.get("topic", ""), "request_id": publish.LAST_REQUEST_ID, "results": results}
     save_posted(posted)
-    return 1 if any(str(r).startswith("ERROR") for r in results.values()) else 0
+    return 1 if any(str(r).startswith("ERROR") for r in results.values()) else 0   # SKIPPED is not an error
 
 
 if __name__ == "__main__":

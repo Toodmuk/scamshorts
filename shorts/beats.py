@@ -264,6 +264,24 @@ def make(spec, size, dur, F, fit, fonts):
         return MapBeat(spec, size, F, fit, fonts)
     if kind == "stat":
         return StatBeat(spec, size, F, fit, fonts)
+    if kind == "compare":
+        items = []
+        for it in (spec.get("items") or [])[:2]:
+            if isinstance(it, dict) and parse_amount(it.get("value")):
+                items.append({"label": str(it.get("label") or "").strip()[:18], "value": parse_amount(it.get("value")),
+                              "unit": str(it.get("unit") or "").strip()[:12]})
+        return {"type": "compare", "title": str(spec.get("title") or "").strip()[:30], "items": items} if len(items) == 2 else None
+    if kind == "bars":
+        items = [{"label": str(it.get("label") or "").strip()[:14], "value": parse_amount(it.get("value"))}
+                 for it in (spec.get("items") or []) if isinstance(it, dict) and parse_amount(it.get("value"))][:5]
+        return {"type": "bars", "title": str(spec.get("title") or "").strip()[:30],
+                "unit": str(spec.get("unit") or "").strip()[:12], "items": items} if len(items) >= 2 else None
+    if kind == "percent":
+        v = parse_amount(spec.get("value"))
+        return {"type": "percent", "value": round(v, 1), "label": label} if v and 0 < v <= 100 else None
+    if kind == "proof":
+        items = [str(s).strip()[:22] for s in (spec.get("items") or []) if str(s).strip()]
+        return {"type": "proof", "items": items[:3]} if items else None
     if kind == "flow":
         return FlowBeat(spec, size, F, fit, fonts, dur=dur)
     raise ValueError(f"unknown beat type {kind}")
@@ -284,6 +302,24 @@ def validate(spec):
     if kind == "stat":
         v = str(spec.get("value") or "").strip()
         return {"type": "stat", "value": v[:16], "label": label} if v else None
+    if kind == "compare":
+        items = []
+        for it in (spec.get("items") or [])[:2]:
+            if isinstance(it, dict) and parse_amount(it.get("value")):
+                items.append({"label": str(it.get("label") or "").strip()[:18], "value": parse_amount(it.get("value")),
+                              "unit": str(it.get("unit") or "").strip()[:12]})
+        return {"type": "compare", "title": str(spec.get("title") or "").strip()[:30], "items": items} if len(items) == 2 else None
+    if kind == "bars":
+        items = [{"label": str(it.get("label") or "").strip()[:14], "value": parse_amount(it.get("value"))}
+                 for it in (spec.get("items") or []) if isinstance(it, dict) and parse_amount(it.get("value"))][:5]
+        return {"type": "bars", "title": str(spec.get("title") or "").strip()[:30],
+                "unit": str(spec.get("unit") or "").strip()[:12], "items": items} if len(items) >= 2 else None
+    if kind == "percent":
+        v = parse_amount(spec.get("value"))
+        return {"type": "percent", "value": round(v, 1), "label": label} if v and 0 < v <= 100 else None
+    if kind == "proof":
+        items = [str(s).strip()[:22] for s in (spec.get("items") or []) if str(s).strip()]
+        return {"type": "proof", "items": items[:3]} if items else None
     if kind == "flow":
         steps = [str(s).strip()[:16] for s in (spec.get("steps") or []) if str(s).strip()]
         if 2 <= len(steps) <= 4:

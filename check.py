@@ -93,14 +93,18 @@ def check_render(tmp):
     """Silent sample video - tests fonts, Thai layout and ffmpeg. Free."""
     try:
         out = os.path.join(tmp, "out")
-        subprocess.run([sys.executable, "run.py", "--script", "samples/sample_script.json",
-                        "--no-voice", "--out", out], check=True, capture_output=True, text=True,
-                       env={k: v for k, v in os.environ.items() if not k.startswith("TELEGRAM")})
-        for root, _, files in os.walk(out):
+        r = subprocess.run([sys.executable, "run.py", "--script", "samples/sample_script.json",
+                            "--no-voice", "--out", out + "2"], capture_output=True, text=True,
+                           env={k: v for k, v in os.environ.items() if not k.startswith("TELEGRAM")})
+        used = next((ln for ln in r.stdout.splitlines() if ln.startswith("Renderer:")), "Renderer: ?")
+        ok_style = used.startswith("Renderer: constructivist") or getattr(settings, "RENDERER", "") == "classic"
+        report(ok_style, f"Video style: {used.split(':', 1)[1].strip()[:120]}",
+               "" if ok_style else "new style failed - check the Install video renderer step in GitHub Actions")
+        for root, _, files in os.walk(out + "2"):
             if "short.mp4" in files:
                 report(True, "Video maker (sample, silent)")
                 return os.path.join(root, "short.mp4")
-        report(False, "Video maker", "no video produced")
+        report(False, "Video maker", (r.stderr or r.stdout or "no video produced")[-300:])
     except subprocess.CalledProcessError as e:
         report(False, "Video maker", (e.stderr or str(e))[-300:])
     return None

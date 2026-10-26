@@ -1,6 +1,7 @@
 """Researches one recent Thai scam with Claude + web search and returns
 the script JSON that the renderer uses."""
 import json
+import os
 import re
 
 import settings
@@ -31,6 +32,8 @@ SCHEMA = """{
     {"narration": "...", "highlight": ["..."],
      "visual": {"type": "money", "amount": 21000000, "label": "ความเสียหาย"}}
   ],
+  "reveal": "Thai slogan for the reveal moment, <= 14 chars, e.g. ของปลอม!",
+  "rule": {"if": ["condition 1, <= 16 chars", "condition 2, <= 16 chars (optional)"], "then": "action, <= 12 chars, e.g. อย่าโอน!"},
   "tip": "Thai, <= 60 chars",
   "end_narration": "Thai, <= 100 chars",
   "title": "Thai, <= 70 chars, ends with #shorts",
@@ -75,7 +78,7 @@ Rules
   company or bank. Narration and title MAY name who was impersonated when the source
   names it (e.g. แอบอ้างการไฟฟ้า) - that is what people search for.
 - Exactly one scene has "stamp": true - the moment the scam is revealed (a chat scene).
-- Visual beats: 2-3 scenes use "visual" INSTEAD of "message" - an animated infographic
+- Visual beats: 3-6 scenes use "visual" INSTEAD of "message" - an animated infographic
   shown in place of the chat. Use only facts from the sources:
     {{"type": "money", "amount": <number in baht>, "label": "<what the amount is>"}}
         - money lost or demanded. Great as the FIRST scene to lead with the loss.
@@ -84,13 +87,28 @@ Rules
     {{"type": "stat", "value": "<short number + unit, e.g. 17 เดือน, 300 ราย>", "label": "<short>"}}
         - a duration, a victim count, or another single striking number.
     {{"type": "flow", "steps": ["<2-4 short boxes, <= 14 chars each>"], "caption": "<short>"}}
-        - how the money or the trick moves, e.g. ["เหยื่อ", "บัญชีม้า", "มิจฉาชีพ"].
+        - how the money or the trick moves, e.g. ["เหยื่อ", "บัญชีม้า", "มิจฉาชีพ"]. For a scheme that
+          repeats, 3 steps and a caption with a number, e.g. "วนซ้ำ 17 เดือน".
+    {{"type": "compare", "title": "<short>", "items": [{{"label": "<short>", "value": <number>, "unit": "<short>"}}, {{"label": "...", "value": <number>, "unit": "..."}}]}}
+        - two numbers side by side (e.g. what was promised vs what was lost, this year vs last year).
+    {{"type": "bars", "title": "<short>", "unit": "<short>", "items": [{{"label": "<short>", "value": <number>}}]}}
+        - 2-5 numbers to compare as rising bars (e.g. cases per year, losses per scam type).
+    {{"type": "percent", "value": <0-100>, "label": "<short>"}}
+        - one percentage from the sources (e.g. share of victims who are over 60).
+    {{"type": "proof", "items": ["<1-3 short names of the fake proof shown, <= 18 chars each>"]}}
+        - the fake documents, slips, pages or messages used to convince the victim,
+          e.g. ["สเตทเมนต์ธนาคาร", "เอกสารตำรวจ"] or ["สลิปโอนเงินปลอม"] or ["หน้าเว็บธนาคารปลอม"].
   Labels and steps are short Thai phrases. The narration of that scene must talk about it.
 - tip: the one red-flag rule that would stop this scam.
+- reveal: 1-3 words slammed on screen at the reveal (e.g. ของปลอม!, มิจฉาชีพ!, อย่ากด!).
+- rule: the same red-flag rule split for the screen: "if" = 1-2 short conditions, "then" = the
+  action, e.g. {{"if": ["ไม่เคยเจอตัว", "ขอยืมเงิน"], "then": "อย่าโอน!"}}.
 - end_narration: restate the rule, say สงสัยโทร 1441, and ask viewers to send the clip
   to their parents or family.
-- 5-7 scenes in total (chat scenes + 2-3 visual scenes).
-- Total narration (scenes + end) 280-420 Thai characters, about 28-38 seconds.
+- 8-11 scenes in total (chat scenes + 3-6 visual scenes), so something new appears every few seconds.
+- Total narration (scenes + end) 700-1000 Thai characters, about 60-80 seconds. Tell the story
+  like a short documentary: what happened, how the trick works step by step, the numbers, the
+  arrest or warning, then the rule.
 - No emoji anywhere.
 - topic: short English slug for the scam type, used to avoid repeats.
 
@@ -146,14 +164,24 @@ def validate(d):
     if isinstance(srcs, (str, dict)):
         srcs = [srcs]
     d["sources"] = [s if isinstance(s, dict) else {"title": "", "url": str(s)} for s in srcs]
-    for k in ("hook", "sender", "tip", "end_narration", "title", "description", "source_label"):
+    for k in ("hook", "sender", "tip", "end_narration", "title", "description", "source_label", "reveal"):
         d[k] = str(d.get(k) or "")
+    d["reveal"] = d["reveal"].strip()[:16] or "มิจฉาชีพ!"
+    rule = d.get("rule") if isinstance(d.get("rule"), dict) else {}
+    conds = [str(x).strip()[:20] for x in (rule.get("if") or []) if str(x).strip()][:2]
+    then = str(rule.get("then") or "").strip()[:14]
+    if not conds or not then:                  # derive a screen rule from the tip
+        parts = d["tip"].replace("=", " ").split()
+        half = max(1, (len(parts) + 1) // 2)
+        conds = [x for x in (" ".join(parts[:half]), " ".join(parts[half:])) if x][:2] or ["ระวัง"]
+        then = then or "อย่าหลงเชื่อ!"
+    d["rule"] = {"if": conds, "then": then}
     scenes = [s for s in d["scenes"] if isinstance(s, dict) and s.get("narration")]
-    if not 2 <= len(scenes) <= 9:
-        raise ValueError(f"expected 2-9 scenes, got {len(scenes)}")
+    if not 2 <= len(scenes) <= 13:
+        raise ValueError(f"expected 2-13 scenes, got {len(scenes)}")
     n_vis = 0
     for s in scenes:
-        vis = beats.validate(s.get("visual")) if n_vis < 3 else None
+        vis = beats.validate(s.get("visual")) if n_vis < 7 else None
         if vis:
             s["visual"] = vis
             s.pop("message", None)        # a scene shows either the chat or a visual
@@ -174,16 +202,26 @@ def validate(d):
     return d
 
 
-def generate(covered_topics, today):
+def generate(covered_topics, today, target_chars=None):
     import anthropic
 
     client = anthropic.Anthropic()
     tools = [{"type": SEARCH_TOOL, "name": "web_search", "max_uses": 4}]
+    learn = ""
+    try:   # last weekly report's lessons (style, hooks, topics) - never overrides the fact rules
+        with open(os.path.join("data", "insights.txt"), encoding="utf-8") as f:
+            learn = f.read().strip()[:1500]
+    except OSError:
+        pass
     messages = [{
         "role": "user",
         "content": (f"Today is {today}. Already covered (do not repeat): "
                     f"{json.dumps(covered_topics, ensure_ascii=False)}\n"
-                    "Research and write today's Short. Return only the JSON."),
+                    + (f"Lessons from last week's performance (apply to style, hooks and topic choice only; "
+                       f"all the rules above still apply):\n{learn}\n" if learn else "")
+                    + (f"Length for this video: total narration {max(350, target_chars - 250)}-{target_chars} Thai "
+                       f"characters (this overrides the length rule; use fewer scenes if needed).\n" if target_chars else "")
+                    + "Research and write today's Short. Return only the JSON."),
     }]
 
     def call():
@@ -206,12 +244,14 @@ def generate(covered_topics, today):
         resp = call()
         draft = validate(_extract_json(_text_of(resp)))
 
+    draft["editor_ok"] = False
     if not EDITOR_PASS:
         return draft
     try:  # second pass: fact-check + natural Thai. Keeps the draft if this fails.
         _add_assistant(messages, resp.content)
         messages.append({"role": "user", "content": EDITOR})
         final = validate(_extract_json(_text_of(call())))
+        final["editor_ok"] = True
         print("Editor pass applied.")
         return final
     except Exception as e:

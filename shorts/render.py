@@ -643,7 +643,45 @@ def _mix(narration, sfx, tmp, loud=True):
 
 
 def build(data, audios, durations, outdir):
-    """Same interface as before: returns the path of short.mp4."""
+    """Makes short.mp4. Uses the Constructivist renderer (web/) when it's installed and
+    selected in settings.py; if it fails for any reason, falls back to the classic look
+    so the day's video still gets made."""
+    if (getattr(settings, "RENDERER", "constructivist") or "").lower() == "constructivist":
+        try:
+            from . import render_web
+            if not render_web.available():
+                raise RuntimeError("Node renderer not installed (web/node_modules missing)")
+            out = render_web.build(data, audios, durations, outdir)
+            print("Renderer: constructivist")
+            _mark(outdir, "constructivist")
+            return out
+        except Exception as e:
+            print(f"Renderer: classic (constructivist failed: {e})")
+            try:
+                from . import deliver
+                deliver.notify(f"⚠️ วันนี้ใช้ระบบตัดต่อสำรอง (หน้าตาแบบเดิม)\nสาเหตุ: {str(e)[:300]}")
+            except Exception:
+                pass
+    else:
+        print("Renderer: classic")
+    _mark(outdir, "classic")
+    return _build_classic(data, audios, durations, outdir)
+
+
+def _mark(outdir, name):
+    path = os.path.join(outdir, "script.json")
+    try:
+        with open(path, encoding="utf-8") as f:
+            d = json.load(f)
+        d["renderer"] = name
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(d, f, ensure_ascii=False, indent=1)
+    except (OSError, ValueError):
+        pass
+
+
+def _build_classic(data, audios, durations, outdir):
+    """The original yellow phone-chat renderer (also the automatic fallback)."""
     tmp = os.path.join(outdir, "tmp")
     os.makedirs(tmp, exist_ok=True)
     # snap every scene to whole frames so picture and sound stay in sync

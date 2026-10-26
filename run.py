@@ -72,8 +72,17 @@ def main():
             data = script.validate(json.load(f))
         print(f"Using script file {a.script}")
     else:
+        target = None
+        if not a.no_voice:   # pace the voice credits so they last until the plan renews
+            per_video, left, videos, src = voice.budget()
+            print(f"Voice budget: {left:,} credits left ({src}), {videos} videos to go -> {per_video:,} per video")
+            if per_video < 450:
+                deliver.notify(f"⏸ เว้นวันนี้: เครดิตเสียง ElevenLabs เหลือ {left:,} สำหรับอีก {videos} คลิป\n"
+                               "ระบบเว้นบางวันเพื่อให้พอใช้ถึงรอบต่ออายุแพ็กเกจ")
+                return
+            target = min(1000, per_video)
         print("Researching today's scam...")
-        data = script.generate([h["topic"] for h in history[-60:]], today)
+        data = script.generate([h["topic"] for h in history[-60:]], today, target)
     data["date"] = today
     with open(os.path.join(outdir, "script.json"), "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=1)

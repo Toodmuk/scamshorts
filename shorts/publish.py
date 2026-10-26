@@ -13,6 +13,8 @@ PROFILE = os.getenv("UPLOAD_POST_USER")
 PAGE_ID = os.getenv("FACEBOOK_PAGE_ID")  # only needed if you manage several Pages
 PLATFORMS = [p.strip() for p in settings.PLATFORMS.split(",") if p.strip()]
 LABEL_AI = bool(settings.LABEL_AI)
+LAST_REQUEST_ID = None      # set by post(); the weekly report uses it for per-video stats
+LAST_USAGE = None           # Upload-Post's monthly upload count/limit, shown in Telegram
 
 
 def enabled():
@@ -86,6 +88,10 @@ def _summary(platform_result):
     r = platform_result
     if not isinstance(r, dict):
         return str(r)[:200]
+    if r.get("skipped"):                      # that platform isn't connected to the profile
+        return "SKIPPED: ยังไม่ได้เชื่อมบัญชีนี้ใน Upload-Post"
+    if r.get("fallback_to_inbox"):            # TikTok daily cap: sent to TikTok drafts instead
+        return "อยู่ใน Inbox ของ TikTok - เปิดแอป TikTok แล้วกดโพสต์เอง"
     failed = r.get("success") is False or str(r.get("status", "")).lower() in ("failed", "error")
     if failed:
         return f"ERROR: {r.get('error') or r.get('message') or r}"[:300]
@@ -106,6 +112,9 @@ def post(video_path, d):
         raise RuntimeError(f"Upload-Post HTTP {r.status_code}: {r.text[:300]}")
     if not j.get("success"):
         raise RuntimeError(j.get("message") or j.get("error") or str(j)[:300])
+    global LAST_REQUEST_ID, LAST_USAGE
+    LAST_REQUEST_ID = j.get("request_id")
+    LAST_USAGE = j.get("usage") if isinstance(j.get("usage"), dict) else None
 
     # ---- from here on the post has been accepted: never raise ----
     try:
