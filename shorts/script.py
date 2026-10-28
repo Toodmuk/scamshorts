@@ -112,7 +112,8 @@ Rules
 - No emoji anywhere.
 - topic: short English slug for the scam type, used to avoid repeats.
 
-Output ONLY this JSON object - no prose, no markdown fences:
+When finished, call the submit_script tool with an object of this shape (do not write the
+JSON as text in your reply):
 {SCHEMA}"""
 
 EDITOR = """Now act as a strict Thai editor and fact-checker for the draft you just wrote.
@@ -123,15 +124,54 @@ EDITOR = """Now act as a strict Thai editor and fact-checker for the draft you j
 3. Make the hook and first line hit harder - lead with the loss or the twist.
 4. Check every visual: amounts, numbers and the province must match the sources exactly.
 5. Check the particle rule and every other rule again.
-Return ONLY the final JSON object, same schema, no prose."""
+Then call submit_script again with the corrected final object (same shape)."""
 
 
 def _extract_json(text):
+    """JSON written as text (backup path). Repairs common slips such as an unescaped
+    quote inside Thai text or a missing comma."""
     text = re.sub(r"```(?:json)?", "", text)
     start, end = text.find("{"), text.rfind("}")
-    if start < 0 or end < 0:
+    if start < 0:
         raise ValueError("no JSON object in model output")
-    return json.loads(text[start:end + 1])
+    chunk = text[start:end + 1] if end > start else text[start:]
+    try:
+        return json.loads(chunk)
+    except json.JSONDecodeError:
+        import json_repair
+        d = json_repair.loads(chunk)
+        if not isinstance(d, dict) or not d.get("scenes"):
+            raise ValueError("model output could not be repaired into a script")
+        return d
+
+
+SUBMIT = {
+    "name": "submit_script",
+    "description": "Submit the finished Short script. Call this once at the end with the complete object.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "topic": {"type": "string"}, "hook": {"type": "string"}, "source_label": {"type": "string"},
+            "app": {"type": "string", "enum": ["sms", "line"]}, "sender": {"type": "string"},
+            "reveal": {"type": "string"}, "rule": {"type": "object"},
+            "scenes": {"type": "array", "items": {"type": "object"}},
+            "tip": {"type": "string"}, "end_narration": {"type": "string"}, "title": {"type": "string"},
+            "description": {"type": "string"}, "hashtags": {"type": "array", "items": {"type": "string"}},
+            "sources": {"type": "array", "items": {"type": "object"}},
+        },
+        "required": ["topic", "hook", "scenes", "tip", "end_narration", "title", "sources"],
+    },
+}
+
+
+def _script_of(resp):
+    """(script dict, tool_use id or None) from a response - the tool call if there is one,
+    otherwise JSON found in the text."""
+    for b in resp.content:
+        if getattr(b, "type", "") == "tool_use" and getattr(b, "name", "") == "submit_script":
+            if isinstance(b.input, dict) and b.input.get("scenes"):
+                return b.input, b.id
+    return _extract_json(_text_of(resp)), None
 
 
 def _add_assistant(messages, content):
@@ -221,36 +261,50 @@ def generate(covered_topics, today, target_chars=None):
                        f"all the rules above still apply):\n{learn}\n" if learn else "")
                     + (f"Length for this video: total narration {max(350, target_chars - 250)}-{target_chars} Thai "
                        f"characters (this overrides the length rule; use fewer scenes if needed).\n" if target_chars else "")
-                    + "Research and write today's Short. Return only the JSON."),
+                    + "Research and write today's Short, then call submit_script."),
     }]
 
+    tools.append(SUBMIT)
+
     def call():
-        resp = client.messages.create(model=MODEL, max_tokens=4000, system=SYSTEM,
+        resp = client.messages.create(model=MODEL, max_tokens=8000, system=SYSTEM,
                                       tools=tools, messages=messages)
         # Long searches can pause mid-turn; continue until finished.
         while resp.stop_reason == "pause_turn":
             _add_assistant(messages, resp.content)
-            resp = client.messages.create(model=MODEL, max_tokens=4000, system=SYSTEM,
+            resp = client.messages.create(model=MODEL, max_tokens=8000, system=SYSTEM,
                                           tools=tools, messages=messages)
         return resp
 
-    resp = call()
-    try:
-        draft = validate(_extract_json(_text_of(resp)))
-    except (ValueError, json.JSONDecodeError) as e:
+    def reply_to(resp, tool_id, text):
+        """Next user turn: answer the tool call (if any), then say what to do."""
         _add_assistant(messages, resp.content)
-        messages.append({"role": "user", "content":
-                         f"That output was not usable ({e}). Return only the JSON object."})
-        resp = call()
-        draft = validate(_extract_json(_text_of(resp)))
+        content = [{"type": "tool_result", "tool_use_id": tool_id, "content": "Received."}] if tool_id else []
+        content.append({"type": "text", "text": text})
+        messages.append({"role": "user", "content": content})
+
+    resp, draft, tool_id, last_err = call(), None, None, None
+    for attempt in range(3):
+        try:
+            raw, tool_id = _script_of(resp)
+            draft = validate(raw)
+            break
+        except (ValueError, json.JSONDecodeError) as e:
+            last_err = e
+            print(f"Script attempt {attempt + 1} not usable ({e}) - asking again.")
+            ids = [b.id for b in resp.content if getattr(b, "type", "") == "tool_use"]
+            reply_to(resp, ids[0] if ids else None,
+                     f"That was not usable ({e}). Call submit_script now with the complete, finished script.")
+            resp = call()
+    if draft is None:
+        raise RuntimeError(f"Claude did not return a usable script after 3 tries: {last_err}")
 
     draft["editor_ok"] = False
     if not EDITOR_PASS:
         return draft
     try:  # second pass: fact-check + natural Thai. Keeps the draft if this fails.
-        _add_assistant(messages, resp.content)
-        messages.append({"role": "user", "content": EDITOR})
-        final = validate(_extract_json(_text_of(call())))
+        reply_to(resp, tool_id, EDITOR)
+        final = validate(_script_of(call())[0])
         final["editor_ok"] = True
         print("Editor pass applied.")
         return final
