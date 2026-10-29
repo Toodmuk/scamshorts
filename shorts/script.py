@@ -65,9 +65,16 @@ Rules
   sentences. Put a space between phrases every 15-25 characters. Read every line
   aloud in your head - no awkward or doubled words (e.g. write "ของราคาถูก" not "ของถูกถูกใจ").
 - {PARTICLES.get(NARRATOR, PARTICLES["neutral"])}
-- Lead with the loss: hook and the first narration line state the consequence or the
-  twist first (e.g. โอนมัดจำไป 1,500 โดนบล็อกทันที), then the scenes show how it happened.
-- hook: concrete and specific to this case, paid off by the video. No emoji.
+- Story beats (MUST appear in this order across the scenes + end):
+  1) hook_scenario: first ~2s / hook + scene 1 open with "ถ้า…" scenario (not only the loss figure).
+  2) rule_card: one clear Rule — one ✗ action and one ✓ action; put hotline 1441 HERE (not only at the end).
+  3) false_safety: what looks safe (fake proof, map, case id) but is not.
+  4) twist: reveal the caller/chat is the scammer.
+  5) cliffhanger_cta: end_narration teases "ตอนต่อไป…" + ask กดติดตาม — NOT a soft tip card.
+- title: lead with the scenario, put the loss figure second. Ends with #shorts.
+- Prefer visual types (money/stat/proof/flow/compare/bars/percent/map) over chat-only; cut every 1-3s.
+- Lead with stakes: hook is a concrete "ถ้า…" for this case; first narration can open the scenario then the loss.
+- hook: concrete and specific to this case, paid off by the video. No emoji. <= 28 chars.
 - source_label: "ที่มา: <agency or outlet> · <day> <Thai month abbr>" for the main source.
 - Each scene: narration, 1-2 highlight words (copied exactly from that narration -
   amounts, the red flag, or the action to avoid), and either a message or a visual.
@@ -103,8 +110,9 @@ Rules
 - reveal: 1-3 words slammed on screen at the reveal (e.g. ของปลอม!, มิจฉาชีพ!, อย่ากด!).
 - rule: the same red-flag rule split for the screen: "if" = 1-2 short conditions, "then" = the
   action, e.g. {{"if": ["ไม่เคยเจอตัว", "ขอยืมเงิน"], "then": "อย่าโอน!"}}.
-- end_narration: restate the rule, say สงสัยโทร 1441, and ask viewers to send the clip
-  to their parents or family.
+- tip: the Rule 1 line (include 1441 in the ✓ action when relevant).
+- end_narration: cliffhanger only — unfinished danger + "ตอนต่อไป: …" and กดติดตาม / ส่งต่อ.
+  Do NOT close on a soft tip; 1441 already lives in tip/rule_card.
 - 8-11 scenes in total (chat scenes + 3-6 visual scenes), so something new appears every few seconds.
 - Total narration (scenes + end) 700-1000 Thai characters, about 60-80 seconds. Tell the story
   like a short documentary: what happened, how the trick works step by step, the numbers, the
@@ -302,12 +310,23 @@ def generate(covered_topics, today, target_chars=None):
     draft["editor_ok"] = False
     if not EDITOR_PASS:
         return draft
-    try:  # second pass: fact-check + natural Thai. Keeps the draft if this fails.
-        reply_to(resp, tool_id, EDITOR)
-        final = validate(_script_of(call())[0])
-        final["editor_ok"] = True
-        print("Editor pass applied.")
-        return final
-    except Exception as e:
-        print(f"Editor pass skipped ({e}) - using the draft.")
-        return draft
+    # second pass: fact-check + natural Thai. Retry once so auto-post is not held on a flaky tool call.
+    last_ed_err = None
+    for ed_attempt in range(2):
+        try:
+            prompt = EDITOR if ed_attempt == 0 else (
+                f"Editor pass failed ({last_ed_err}). Call submit_script now with the corrected "
+                "final script object (same shape). Do not write JSON as plain text."
+            )
+            reply_to(resp, tool_id, prompt)
+            resp = call()
+            raw, tool_id = _script_of(resp)
+            final = validate(raw)
+            final["editor_ok"] = True
+            print(f"Editor pass applied (attempt {ed_attempt + 1}).")
+            return final
+        except Exception as e:
+            last_ed_err = e
+            print(f"Editor pass attempt {ed_attempt + 1} failed ({e}).")
+    print(f"Editor pass skipped ({last_ed_err}) - using the draft.")
+    return draft

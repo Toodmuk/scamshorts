@@ -311,7 +311,7 @@
     };
     const subtitle = (c, line, u) => {
       const txt = line === n ? S0.end_narration : scenes[line].narration;
-      c.fillStyle = BLACK; c.fillRect(48, 1584, W - 96, 236);
+      c.fillStyle = BLACK; c.fillRect(48, 1480, W - 96, 236);
       let s = 56; c.font = `500 ${s}px "Kanit"`; let lines = wrap(c, txt, 940);
       while (lines.length > 3 && s > 40) { s -= 4; c.font = `500 ${s}px "Kanit"`; lines = wrap(c, txt, 940); }
       lines = lines.slice(0, 3);
@@ -514,13 +514,15 @@
       slogan(c, rule.then, 90, 1380, -0.15, 250, BLACK, RED, 940, stepIn(u, 1.0, 3));
     };
     const drawCTA = (c, u) => {
+      // Cliffhanger closer (1441 lives on the rule card / tip, not here).
       disc(c, 200, 470, 230 * E.out(stepIn(u, 0, 3)));
       c.save(); c.translate(90, 1120); c.rotate(-0.12); c.fillStyle = BLACK; c.fillRect(-20, -520, 940 * E.out(stepIn(u, 0.05, 3)), 600);
-      if (u >= 0.2) { c.fillStyle = CREAM; c.font = '800 84px "Kanit"'; c.fillText('สงสัย โทร', 30, -400); }
-      const k = stepIn(u, 0.35, 3); if (k > 0) { const s = 1 + 0.6 * (1 - k); c.translate(20, 20); c.scale(s, s); c.fillStyle = RED; c.font = '400 340px "Anton"'; c.fillText('1441', 0, 0); }
+      if (u >= 0.15) { c.fillStyle = RED; c.font = '900 96px "Kanit"'; c.fillText('ตอนต่อไป', 30, -380); }
+      const tease = (S0.tip || S0.end_narration || '').trim().slice(0, 36);
+      if (u >= 0.35 && tease) { c.fillStyle = CREAM; c.font = '700 52px "Kanit"'; c.fillText(tease, 30, -240); }
       c.restore();
-      slab(c, 'ส่งต่อให้พ่อแม่ด้วยนะ', 140, 1330, -0.12, '800 {s}px "Kanit"', 62, CREAM, RED, 900, 20, 12, stepIn(u, 0.7, 2));
-      if (channel) slab(c, 'กดติดตาม ' + channel, 150, 1470, -0.12, '700 {s}px "Kanit"', 50, CREAM, BLACK, 880, 18, 10, stepIn(u, 0.9, 2));
+      if (channel) slab(c, 'กดติดตาม ' + channel, 140, 1330, -0.12, '800 {s}px "Kanit"', 62, CREAM, RED, 900, 20, 12, stepIn(u, 0.7, 2));
+      slab(c, 'แล้วมารอดไปด้วยกัน', 150, 1470, -0.12, '700 {s}px "Kanit"', 50, CREAM, BLACK, 880, 18, 10, stepIn(u, 0.9, 2));
     };
 
     // ---------------- camera: slow push-in + drift on every beat (never fully still)

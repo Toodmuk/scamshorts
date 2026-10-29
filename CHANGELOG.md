@@ -33,3 +33,10 @@
 
 ## r5
 - Constructivist video style (Node renderer) with automatic fallback to the classic look.
+
+## r11 (2026-10-29)
+- Hands-off: **no Telegram ok gate** — auto-posts on Mon/Wed/Fri/Sun; Telegram = performance report (+ optional preview)
+- Safety notes (no sources / editor miss / classic fallback) are logged, never hold the day
+- Manual Run workflow posts immediately (skips AUTO_POST_HOUR wait)
+- Editor pass retries once; beat-map prompt; captions nudged up; cliffhanger CTA
+

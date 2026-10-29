@@ -1,17 +1,14 @@
-"""Posts today's Short once you approve it in Telegram.
+"""Posts today's Short on schedule (or right away on workflow_dispatch).
 
 Runs every hour (07:23-22:23 Bangkok). Each run:
   - already posted / skipped today -> does nothing (silent)
-  - you replied "ok"              -> posts now, sends you the links
-  - you replied "skip"            -> tells you once, then stays silent
-  - no reply yet                  -> silent; the last run of the day (22:xx)
-                                     tells you it wasn't posted
+  - POST_MODE auto                 -> posts at AUTO_POST_HOUR (or immediately
+                                     when POST_ANY_DAY is set from Run workflow)
+  - reply "skip" in Telegram       -> skip that day only (emergency brake)
+  - POST_MODE approve              -> posts only after Telegram "ok"
 
   python post.py artifact            # folder containing short.mp4 + script.json
   python post.py artifact --dry-run  # show what would be posted, post nothing
-
-POST_MODE "approve" (default): posts only after "ok".
-POST_MODE "auto": posts on the first run unless you replied "skip".
 """
 import argparse
 import datetime
@@ -42,8 +39,8 @@ def save_posted(posted):
         json.dump(posted, f, ensure_ascii=False, indent=1)
 
 
-def safety_problems(d):
-    """Reasons not to post without a human look (auto mode only)."""
+def safety_notes(d):
+    """Non-blocking notes logged on auto post (never holds the day)."""
     out = []
     if not [s for s in d.get("sources") or [] if str((s or {}).get("url", "")).startswith("http")]:
         out.append("ไม่มีแหล่งข้อมูลอ้างอิง")
@@ -97,11 +94,12 @@ def main():
         return 0
 
     decision = deliver.approval(midnight)
-    problems = safety_problems(data)
-    auto_ready = (mode == "auto" and decision != "skip" and not problems
-                  and now.hour >= int(getattr(settings, "AUTO_POST_HOUR", 18)))
+    notes = safety_notes(data)
+    # Manual "Run workflow" sets POST_ANY_DAY — post now, don't wait for AUTO_POST_HOUR.
+    hour_ok = bool(os.getenv("POST_ANY_DAY")) or now.hour >= int(getattr(settings, "AUTO_POST_HOUR", 18))
+    auto_ready = mode == "auto" and decision != "skip" and hour_ok
     go = decision == "ok" or auto_ready
-    print(f"mode={mode} decision={decision} problems={problems} -> {'POST' if go else 'WAIT'}")
+    print(f"mode={mode} decision={decision} notes={notes} -> {'POST' if go else 'WAIT'}")
 
     if a.dry_run:
         for k, v in publish.build_form(data):
@@ -113,17 +111,14 @@ def main():
         posted[today] = {"status": "skipped", "title": data["title"]}
         save_posted(posted)
         return 0
-    if not go and mode == "auto" and problems and decision != "skip" and f"held:{today}" not in posted:
-        deliver.notify("⏸ คลิปวันนี้ถูกพักไว้ ยังไม่โพสต์อัตโนมัติ\nเหตุผล: " + "; ".join(problems)
-                       + "\nดูคลิปแล้ว ตอบ ok เพื่อโพสต์ / skip เพื่อข้าม")
-        posted[f"held:{today}"] = {"problems": problems}
-        save_posted(posted)
     if not go:
-        if last_run:
+        if last_run and mode == "approve":
             deliver.notify("วันนี้ไม่ได้โพสต์ - ไม่ได้รับคำตอบ ok")
             posted[today] = {"status": "no reply", "title": data["title"]}
             save_posted(posted)
         return 0                                    # otherwise wait for the next hourly run
+    if notes:
+        print("Auto-post notes (non-blocking): " + "; ".join(notes))
     if not publish.enabled():
         deliver.notify("ยังไม่ได้ตั้งค่า UPLOAD_POST_API_KEY / UPLOAD_POST_USER - โพสต์ไม่ได้")
         return 1
@@ -139,6 +134,7 @@ def main():
     deliver.notify("โพสต์แล้ว\n" + "\n".join(f"{p}: {r}" for p, r in results.items()) + usage)
     posted[today] = {"status": "posted", "title": data["title"], "hook": data.get("hook", ""),
                      "topic": data.get("topic", ""), "request_id": publish.LAST_REQUEST_ID, "results": results}
+    posted.pop(f"held:{today}", None)
     save_posted(posted)
     return 1 if any(str(r).startswith("ERROR") for r in results.values()) else 0   # SKIPPED is not an error
 
