@@ -87,7 +87,10 @@ def build(data, audios, durations, outdir):
                        capture_output=True, text=True, timeout=1800)
     print(r.stdout.strip())
     if r.returncode != 0:
-        raise RuntimeError((r.stderr or r.stdout or "node renderer failed").strip()[-400:])
+        out = (r.stderr or "") + "\n" + (r.stdout or "")
+        lines = [ln.strip() for ln in out.splitlines() if ln.strip()]
+        key = next((ln for ln in lines if "Error" in ln or "error" in ln or "FAILED" in ln), lines[-1] if lines else "node renderer failed")
+        raise RuntimeError(key[:300])
 
     # voice + effects (+ optional music), levelled for phone speakers when there is a voice
     narration = R._narration(audios, durs, tmp)

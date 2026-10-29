@@ -2,31 +2,52 @@ name: Daily Short
 
 on:
   schedule:
-    - cron: "0 23 * * *"   # 06:00 Bangkok time (GitHub may start a few minutes late)
-  workflow_dispatch:        # "Run workflow" button for manual runs
+    - cron: "17 23 * * *"   # 06:17 Bangkok every day; only POST_DAYS in settings.py make a video
+  workflow_dispatch:        # "Run workflow" makes a video right away, any day
 
 permissions:
-  contents: write           # lets the job save topic history back to the repo
+  contents: write           # saves topic history and the voice-usage log
 
 jobs:
   make-short:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v6
 
+      - name: Posting day?
+        id: day
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] || python3 schedule.py; then
+            echo "go=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "go=false" >> "$GITHUB_OUTPUT"; echo "Not a posting day (see POST_DAYS in settings.py) - nothing to do."
+          fi
+
       - uses: actions/setup-python@v6
+        if: steps.day.outputs.go == 'true'
         with:
           python-version: "3.12"
           cache: pip
 
       - name: Install system packages
-        run: sudo apt-get update && sudo apt-get install -y ffmpeg libraqm0 libfribidi0
+        if: steps.day.outputs.go == 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg libraqm0 libfribidi0 libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev libasound2t64
+
+      - name: Install video renderer (Node)
+        if: steps.day.outputs.go == 'true'
+        run: |
+          node --version
+          npm ci --prefix web --no-audit --no-fund
 
       - name: Install Python packages
+        if: steps.day.outputs.go == 'true'
         run: pip install -r requirements.txt
 
       - name: Make today's Short
+        if: steps.day.outputs.go == 'true'
         env:                # API keys come from GitHub Secrets - see settings.py
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
@@ -35,7 +56,7 @@ jobs:
         run: python run.py
 
       - name: Save video in GitHub
-        if: always()
+        if: always() && steps.day.outputs.go == 'true'
         uses: actions/upload-artifact@v6
         with:
           name: short-${{ github.run_number }}
@@ -45,12 +66,12 @@ jobs:
             out/*/post.txt
             out/*/script.json
           if-no-files-found: ignore
-          retention-days: 14
+          retention-days: 3         # ~40 MB per video; posting only needs the same day's video
 
-      - name: Save topic history
-        if: always()
+      - name: Save topic history and voice usage
+        if: always() && steps.day.outputs.go == 'true'
         run: |
           git config user.name "shorts-bot"
           git config user.email "shorts-bot@users.noreply.github.com"
-          git add data/history.json
+          git add data/history.json data/voice_usage.json 2>/dev/null || true
           git diff --cached --quiet || (git commit -m "history: $(date -u +%F)" && git pull --rebase && git push)

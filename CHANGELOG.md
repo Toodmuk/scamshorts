@@ -1,6 +1,12 @@
 # ทันท่วงที — revision history
 
-## r9 · 26 Oct 2026 (this bundle)
+## r10 · 26 Oct 2026 (this bundle)
+- Fix for "วันนี้ใช้ระบบตัดต่อสำรอง": GitHub's machines lack the sound library (libasound) that the
+  new renderer's sound-effects engine needs; the workflows now install it.
+- If the sound-effects engine still can't load, the video keeps the new look and just skips the effects.
+- The fallback message in Telegram now shows the real error line.
+
+## r9 · 26 Oct 2026
 - Fix for "no JSON object in model output" / "Expecting ',' delimiter": Claude now hands the script
   back through a structured tool call (always valid JSON) instead of writing JSON as text.
 - Backup: if it ever writes JSON as text anyway, common slips (e.g. a quote inside Thai text) are

@@ -8,7 +8,7 @@ on:
 jobs:
   check:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v6
 
@@ -18,7 +18,14 @@ jobs:
           cache: pip
 
       - name: Install system packages
-        run: sudo apt-get update && sudo apt-get install -y ffmpeg libraqm0 libfribidi0
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg libraqm0 libfribidi0 libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev libasound2t64
+
+      - name: Install video renderer (Node)
+        run: |
+          node --version
+          npm ci --prefix web --no-audit --no-fund
 
       - name: Install Python packages
         run: pip install -r requirements.txt

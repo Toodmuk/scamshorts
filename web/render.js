@@ -7,7 +7,13 @@ const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
 const { createCanvas, registerFont } = require('canvas');
-const { OfflineAudioContext } = require('node-web-audio-api');
+let OfflineAudioContext = null;          // sound effects engine; the video still renders without it
+try {
+  if (process.env.TT_NO_AUDIO) throw new Error('disabled for a test');
+  ({ OfflineAudioContext } = require('node-web-audio-api'));
+} catch (e) {
+  console.log('Sound effects off: ' + String(e && e.message || e).split('\n')[0]);
+}
 
 const FONTS = path.join(__dirname, 'fonts');
 registerFont(path.join(FONTS, 'Kanit-Black.ttf'), { family: 'Kanit', weight: '900' });
@@ -39,8 +45,13 @@ function wav16(inter, sr) {                       // interleaved float stereo ->
   const t0 = Date.now();
 
   // sound effects, scored to the same clock as the picture (voiceover mode keeps them under the voice)
-  const snd = await global.SOUND.renderOffline(ex.scoreSound, ex.DURATION, 48000, { voiceover: true });
-  fs.writeFileSync(job.out_audio, wav16(snd.inter, snd.sr));
+  let snd = { peak: 0 };
+  if (OfflineAudioContext) {
+    snd = await global.SOUND.renderOffline(ex.scoreSound, ex.DURATION, 48000, { voiceover: true });
+    fs.writeFileSync(job.out_audio, wav16(snd.inter, snd.sr));
+  } else {
+    fs.writeFileSync(job.out_audio, wav16(new Float32Array(Math.ceil(ex.DURATION * 48000) * 2), 48000));
+  }
 
   // picture: every frame is a pure function of t
   const cv = createCanvas(ex.W, ex.HH), ctx = cv.getContext('2d');

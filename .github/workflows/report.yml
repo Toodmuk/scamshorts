@@ -1,0 +1,42 @@
+name: Weekly report
+
+on:
+  schedule:
+    - cron: "17 2 * * 1"     # Monday 09:17 Bangkok
+  workflow_dispatch:          # "Run workflow" to get a report right now
+
+permissions:
+  contents: write             # saves data/stats.json and data/insights.txt
+
+jobs:
+  report:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install Python packages
+        run: pip install -r requirements.txt
+
+      - name: Build and send the report
+        env:                  # API keys come from GitHub Secrets - see settings.py
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          UPLOAD_POST_API_KEY: ${{ secrets.UPLOAD_POST_API_KEY }}
+          UPLOAD_POST_USER: ${{ secrets.UPLOAD_POST_USER }}
+          FACEBOOK_PAGE_ID: ${{ secrets.FACEBOOK_PAGE_ID }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python report.py
+
+      - name: Save stats and lessons
+        if: always()
+        run: |
+          git config user.name "shorts-bot"
+          git config user.email "shorts-bot@users.noreply.github.com"
+          git add data/stats.json data/insights.txt 2>/dev/null || true
+          git diff --cached --quiet || (git commit -m "weekly report: $(TZ=Asia/Bangkok date +%F)" && git pull --rebase && git push)
