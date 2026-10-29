@@ -57,17 +57,33 @@ def build_form(d):
     return form
 
 
-def _status(request_id, tries=20, wait=15):
-    """Background uploads: poll until results come back (max ~5 min)."""
+PENDING = ("processing", "queued", "pending", "in_progress", "uploading")
+
+
+def _pending(j):
+    """True while any platform is still processing/queued."""
+    for _, r in _items(j.get("results")):
+        if isinstance(r, dict) and str(r.get("status", "")).lower() in PENDING:
+            return True
+    return False
+
+
+def _status(request_id, tries=48, wait=15):
+    """Poll until every platform is final (max ~12 min). Returns the last answer."""
+    last = None
     for _ in range(tries):
         time.sleep(wait)
         r = requests.get(f"{API}/uploadposts/status", params={"request_id": request_id},
                          headers={"Authorization": f"Apikey {KEY}"}, timeout=60)
-        if r.ok:
-            j = r.json()
-            if j.get("results") or str(j.get("status", "")).lower() in ("completed", "finished", "failed"):
-                return j
-    return {"note": f"still processing - check the Upload-Post dashboard (request {request_id})"}
+        if not r.ok:
+            continue
+        j = r.json()
+        last = j
+        if j.get("results") and not _pending(j):
+            return j
+        if not j.get("results") and str(j.get("status", "")).lower() in ("completed", "finished", "failed"):
+            return j
+    return last or {"note": f"still processing - check the Upload-Post dashboard (request {request_id})"}
 
 
 def _items(results):
@@ -118,7 +134,7 @@ def post(video_path, d):
 
     # ---- from here on the post has been accepted: never raise ----
     try:
-        if j.get("request_id") and not j.get("results"):
+        if j.get("request_id") and (not j.get("results") or _pending(j)):
             j = _status(j["request_id"])
         out = {}
         for platform, res in _items(j.get("results")):
