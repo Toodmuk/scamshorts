@@ -35,7 +35,8 @@
 - Constructivist video style (Node renderer) with automatic fallback to the classic look.
 
 ## r11 (2026-10-29)
-- Hands-off automation: editor pass retries once so flaky tool calls don't hold auto-post
-- Script prompt: scenario → Rule ✓/✗ → false safety → twist → cliffhanger CTA (1441 in rule)
-- Captions nudged up (~y 1480) clear of TikTok bottom UI
-- CTA card is cliffhanger + follow (not soft tip / 1441 closer)
+- Hands-off: **no Telegram ok gate** — auto-posts on Mon/Wed/Fri/Sun; Telegram = performance report (+ optional preview)
+- Safety notes (no sources / editor miss / classic fallback) are logged, never hold the day
+- Manual Run workflow posts immediately (skips AUTO_POST_HOUR wait)
+- Editor pass retries once; beat-map prompt; captions nudged up; cliffhanger CTA
+

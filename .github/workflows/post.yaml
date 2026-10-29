@@ -26,7 +26,7 @@ jobs:
           TODAY=$(TZ=Asia/Bangkok date +%F)
           if [ "${{ github.event_name }}" != "workflow_dispatch" ] && ! python3 schedule.py; then
             echo "skip=true" >> "$GITHUB_OUTPUT"; echo "Not a posting day - nothing to do."
-          elif grep -q "\"$TODAY\"" data/posted.json 2>/dev/null; then
+          elif python3 -c "import json; d=json.load(open('data/posted.json')); raise SystemExit(0 if '$TODAY' in d else 1)" 2>/dev/null; then
             echo "skip=true" >> "$GITHUB_OUTPUT"; echo "Already handled $TODAY - nothing to do."
           fi
 

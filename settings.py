@@ -80,17 +80,17 @@ MAX_SECONDS = 88
 
 
 # ---- Posting -------------------------------------------------------------------
-# "auto"    = posts every day by itself (reply "skip" in Telegram to stop that day's post)
-# "approve" = posts only after you reply "ok"
+# "auto"    = posts by itself on POST_DAYS (Telegram is for performance reports;
+#             reply "skip" only as an emergency brake for that day)
+# "approve" = posts only after you reply "ok" (legacy; not used for hands-off)
 POST_MODE = "auto"
 
 # In "auto" mode the video goes out at the first hourly check from this hour (Bangkok),
-# about 18:23 - evening is when Thai viewers scroll most. A video that fails the safety
-# check (no sources, fact-check didn't run, or the backup look was used) is held, and
-# Telegram asks you to reply "ok" instead.
+# about 18:23 — evening is when Thai viewers scroll most. Manual "Run workflow" posts now.
+# Safety notes (no sources / fact-check skipped / backup look) are logged, never held.
 AUTO_POST_HOUR = 18
 
-# Shown in the morning Telegram message as the posting time.
+# Shown in the morning Telegram preview caption.
 POST_TIME = "18:30"
 
 # Where each video is posted. TikTok needs a paid Upload-Post plan and the TikTok account

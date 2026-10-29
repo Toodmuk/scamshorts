@@ -1,5 +1,5 @@
-"""Telegram: sends the daily preview to your phone and reads your
-'ok' / 'skip' reply. Skipped silently if Telegram isn't configured."""
+"""Telegram: sends the daily preview; reads optional 'skip' (or legacy 'ok').
+Performance reports also go here. Skipped silently if Telegram isn't configured."""
 import os
 
 import requests
@@ -32,7 +32,7 @@ def telegram(video_path, post_text, post_mode="approve", post_time="18:00"):
         print("Telegram not configured - skipping delivery.")
         return False
     if post_mode == "auto":
-        caption = f"คลิปวันนี้ จะโพสต์อัตโนมัติ {post_time} น.\nตอบ skip ถ้าไม่อยากให้โพสต์"
+        caption = f"คลิปวันนี้ — โพสต์อัตโนมัติ {post_time} น. (ไม่ต้องตอบ ok)\nรายงานยอดส่งใน Telegram วันจันทร์"
     else:
         caption = f"คลิปวันนี้ ตรวจแหล่งข้อมูลด้านล่าง\nตอบ ok ก่อน {post_time} น. เพื่อโพสต์ / skip เพื่อข้าม"
     with open(video_path, "rb") as f:
