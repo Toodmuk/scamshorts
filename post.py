@@ -119,6 +119,8 @@ def main():
         return 0                                    # otherwise wait for the next hourly run
     if notes:
         print("Auto-post notes (non-blocking): " + "; ".join(notes))
+        deliver.notify("⚠️ โพสต์อัตโนมัติแม้มีข้อควรระวัง: " + "; ".join(notes)
+                       + f"\nเรื่อง: {data.get('title', '')}\nตรวจคลิปอีกครั้งได้ที่ช่องทางต่าง ๆ")
     if not publish.enabled():
         deliver.notify("ยังไม่ได้ตั้งค่า UPLOAD_POST_API_KEY / UPLOAD_POST_USER - โพสต์ไม่ได้")
         return 1
@@ -131,7 +133,9 @@ def main():
 
     u = publish.LAST_USAGE or {}
     usage = f"\nUpload-Post เดือนนี้ใช้ไป {u['count']}/{u['limit']} ครั้ง" if u.get("limit") else ""
-    deliver.notify("โพสต์แล้ว\n" + "\n".join(f"{p}: {r}" for p, r in results.items()) + usage)
+    failed = [p for p, r in results.items() if str(r).startswith("ERROR")]
+    head = "⚠️ โพสต์ไม่ครบ: " + ", ".join(failed) + "\n" if failed else "โพสต์แล้ว\n"
+    deliver.notify(head + "\n".join(f"{p}: {r}" for p, r in results.items()) + usage)
     posted[today] = {"status": "posted", "title": data["title"], "hook": data.get("hook", ""),
                      "topic": data.get("topic", ""), "request_id": publish.LAST_REQUEST_ID, "results": results}
     posted.pop(f"held:{today}", None)

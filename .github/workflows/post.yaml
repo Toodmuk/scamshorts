@@ -16,7 +16,7 @@ concurrency:                   # never run two at once (no double posts)
 jobs:
   post:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v6
 
@@ -50,7 +50,6 @@ jobs:
 
       - name: Post if approved
         if: steps.done.outputs.skip != 'true'
-        continue-on-error: true    # post.py already messages you about its own problems
         env:                       # API keys come from GitHub Secrets - see settings.py
           UPLOAD_POST_API_KEY: ${{ secrets.UPLOAD_POST_API_KEY }}
           UPLOAD_POST_USER: ${{ secrets.UPLOAD_POST_USER }}
@@ -76,4 +75,4 @@ jobs:
         run: |
           curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
             --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" \
-            --data-urlencode "text=❌ ระบบโพสต์มีปัญหา ดูรายละเอียด: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" > /dev/null
+            --data-urlencode "text=❌ ระบบโพสต์มีปัญหา (บางแพลตฟอร์มโพสต์ไม่สำเร็จหรือระบบล้ม) ดูรายละเอียด: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" > /dev/null
