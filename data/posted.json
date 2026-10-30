@@ -99,5 +99,18 @@
    "instagram": "ERROR: {'platform': 'instagram', 'status': 'processing', 'attempts': 1, 'success': False}",
    "tiktok": "ERROR: {'platform': 'tiktok', 'status': 'processing', 'attempts': 1, 'success': False}"
   }
+ },
+ "2026-10-30": {
+  "status": "posted",
+  "title": "ถ้าร้านเคยส่งของจริง ชวนพรีล็อตใหม่ อย่าโอน เสียหาย 47 ล้าน #shorts",
+  "hook": "เคยได้ของจริง แล้วชวนพรี",
+  "topic": "trading-card-preorder-trust-building-fake-supplier-orders",
+  "request_id": "236d1ee773ca4683ad34e78d20d09545",
+  "results": {
+   "youtube": "https://www.youtube.com/watch?v=bDfSdTPVkKQ",
+   "facebook": "https://www.facebook.com/reel/1558564332958368",
+   "instagram": "https://www.instagram.com/reel/DfHeauCibYS/",
+   "tiktok": "https://www.tiktok.com/@tuntuangtee/video/7702421259304324359"
+  }
  }
 }
